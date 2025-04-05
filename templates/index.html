@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Password Strength Analyzer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .password-strength-meter {
+            height: 10px;
+            margin-top: 5px;
+            border-radius: 5px;
+            transition: width 0.3s ease;
+        }
+        .strength-0 { background-color: #dc3545; width: 20%; }
+        .strength-1 { background-color: #ffc107; width: 40%; }
+        .strength-2 { background-color: #ffc107; width: 60%; }
+        .strength-3 { background-color: #28a745; width: 80%; }
+        .strength-4 { background-color: #28a745; width: 100%; }
+        .suggestion-card {
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+        .suggestion-card:hover {
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="text-center">AI Password Strength Analyzer</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Enter your password:</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="password" placeholder="Enter password to analyze">
+                                <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                            <div class="password-strength-meter mt-2" id="strengthMeter"></div>
+                        </div>
+                        
+                        <div id="analysisResults" style="display: none;">
+                            <h4>Analysis Results</h4>
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h5>Password Strength Score: <span id="strengthScore"></span>/10</h5>
+                                    <div class="row mt-3">
+                                        <div class="col-md-6">
+                                            <ul class="list-unstyled">
+                                                <li><strong>Length:</strong> <span id="passwordLength"></span></li>
+                                                <li><strong>Has Uppercase:</strong> <span id="hasUpper"></span></li>
+                                                <li><strong>Has Lowercase:</strong> <span id="hasLower"></span></li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <ul class="list-unstyled">
+                                                <li><strong>Has Numbers:</strong> <span id="hasDigit"></span></li>
+                                                <li><strong>Has Special Chars:</strong> <span id="hasSpecial"></span></li>
+                                                <li><strong>Entropy:</strong> <span id="entropy"></span></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <h4>Time to Crack</h4>
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <div id="timeToCrack"></div>
+                                </div>
+                            </div>
+                            
+                            <h4>Suggested Improvements</h4>
+                            <div id="suggestions"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const passwordInput = document.getElementById('password');
+            const toggleButton = document.getElementById('togglePassword');
+            const strengthMeter = document.getElementById('strengthMeter');
+            const analysisResults = document.getElementById('analysisResults');
+            
+            let passwordVisible = false;
+            
+            toggleButton.addEventListener('click', function() {
+                passwordVisible = !passwordVisible;
+                passwordInput.type = passwordVisible ? 'text' : 'password';
+                toggleButton.innerHTML = passwordVisible ? 
+                    '<i class="bi bi-eye-slash"></i>' : 
+                    '<i class="bi bi-eye"></i>';
+            });
+            
+            passwordInput.addEventListener('input', function() {
+                const password = this.value;
+                if (password.length > 0) {
+                    analyzePassword(password);
+                } else {
+                    analysisResults.style.display = 'none';
+                }
+            });
+            
+            function analyzePassword(password) {
+                fetch('/analyze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ password: password })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    displayResults(data);
+                    analysisResults.style.display = 'block';
+                })
+                .catch(error => console.error('Error:', error));
+            }
+            
+            function displayResults(data) {
+                // Update strength meter
+                const strengthClass = `strength-${Math.floor(data.analysis.strength_score / 2.5)}`;
+                strengthMeter.className = `password-strength-meter ${strengthClass}`;
+                
+                // Update analysis results
+                document.getElementById('strengthScore').textContent = data.analysis.strength_score.toFixed(1);
+                document.getElementById('passwordLength').textContent = data.analysis.length;
+                document.getElementById('hasUpper').textContent = data.analysis.has_upper ? '✓' : '✗';
+                document.getElementById('hasLower').textContent = data.analysis.has_lower ? '✓' : '✗';
+                document.getElementById('hasDigit').textContent = data.analysis.has_digit ? '✓' : '✗';
+                document.getElementById('hasSpecial').textContent = data.analysis.has_special ? '✓' : '✗';
+                document.getElementById('entropy').textContent = data.analysis.entropy.toFixed(2);
+                
+                // Update time to crack
+                const timeToCrackHtml = Object.entries(data.time_to_crack)
+                    .map(([scenario, info]) => `
+                        <div class="mb-2">
+                            <strong>${info.description}:</strong> ${info.time}
+                        </div>
+                    `).join('');
+                document.getElementById('timeToCrack').innerHTML = timeToCrackHtml;
+                
+                // Update suggestions
+                const suggestionsHtml = data.suggestions.map(suggestion => `
+                    <div class="card suggestion-card" onclick="copyToClipboard('${suggestion}')">
+                        <div class="card-body">
+                            ${suggestion}
+                        </div>
+                    </div>
+                `).join('');
+                document.getElementById('suggestions').innerHTML = suggestionsHtml;
+            }
+            
+            window.copyToClipboard = function(text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    alert('Password copied to clipboard!');
+                });
+            };
+        });
+    </script>
+</body>
+</html> 
